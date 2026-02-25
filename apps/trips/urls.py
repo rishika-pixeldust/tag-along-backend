@@ -9,7 +9,7 @@ from apps.trips.views import TripStopViewSet, TripViewSet
 app_name = 'trips'
 
 router = DefaultRouter()
-router.register(r'trips', TripViewSet, basename='trip')
+router.register(r'', TripViewSet, basename='trip')
 
 # Nested routes for trip stops
 stop_list = TripStopViewSet.as_view({
@@ -29,17 +29,17 @@ stop_reorder = TripStopViewSet.as_view({
 urlpatterns = [
     path('', include(router.urls)),
     path(
-        'trips/<uuid:trip_pk>/stops/',
+        '<uuid:trip_pk>/stops/',
         stop_list,
         name='trip-stop-list',
     ),
     path(
-        'trips/<uuid:trip_pk>/stops/reorder/',
+        '<uuid:trip_pk>/stops/reorder/',
         stop_reorder,
         name='trip-stop-reorder',
     ),
     path(
-        'trips/<uuid:trip_pk>/stops/<uuid:pk>/',
+        '<uuid:trip_pk>/stops/<uuid:pk>/',
         stop_detail,
         name='trip-stop-detail',
     ),

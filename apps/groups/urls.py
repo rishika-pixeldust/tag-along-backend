@@ -14,7 +14,7 @@ from apps.groups.views import (
 app_name = 'groups'
 
 router = DefaultRouter()
-router.register(r'groups', GroupViewSet, basename='group')
+router.register(r'', GroupViewSet, basename='group')
 
 # Nested router for members
 member_list = GroupMemberViewSet.as_view({
@@ -27,19 +27,19 @@ member_detail = GroupMemberViewSet.as_view({
 
 urlpatterns = [
     path('', include(router.urls)),
-    path('groups/join/', JoinGroupView.as_view(), name='group-join'),
+    path('join/', JoinGroupView.as_view(), name='group-join'),
     path(
-        'groups/<uuid:group_pk>/members/',
+        '<uuid:group_pk>/members/',
         member_list,
         name='group-member-list',
     ),
     path(
-        'groups/<uuid:group_pk>/members/<uuid:pk>/',
+        '<uuid:group_pk>/members/<uuid:pk>/',
         member_detail,
         name='group-member-detail',
     ),
     path(
-        'groups/<uuid:group_pk>/leave/',
+        '<uuid:group_pk>/leave/',
         LeaveGroupView.as_view(),
         name='group-leave',
     ),

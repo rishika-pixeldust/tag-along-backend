@@ -87,9 +87,9 @@ class GroupViewSet(viewsets.ModelViewSet):
             status=status.HTTP_200_OK,
         )
 
-    @action(detail=True, methods=['post'], url_path='regenerate-code')
+    @action(detail=True, methods=['post', 'get'], url_path='invite-code')
     def regenerate_invite_code(self, request, pk=None):
-        """Regenerate the invite code for a group."""
+        """Get or regenerate the invite code for a group."""
         group = self.get_object()
         group.invite_code = generate_invite_code()
         group.save(update_fields=['invite_code'])

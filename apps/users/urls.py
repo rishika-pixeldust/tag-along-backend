@@ -8,6 +8,7 @@ from apps.users.views import (
     ChangePasswordView,
     FirebaseTokenExchangeView,
     LoginView,
+    LogoutView,
     RegisterView,
     UserProfileView,
     UserSearchView,
@@ -17,13 +18,14 @@ app_name = 'users'
 
 urlpatterns = [
     # Authentication
-    path('auth/register/', RegisterView.as_view(), name='register'),
-    path('auth/login/', LoginView.as_view(), name='login'),
-    path('auth/token/refresh/', TokenRefreshView.as_view(), name='token-refresh'),
-    path('auth/firebase/', FirebaseTokenExchangeView.as_view(), name='firebase-auth'),
+    path('register/', RegisterView.as_view(), name='register'),
+    path('login/', LoginView.as_view(), name='login'),
+    path('refresh/', TokenRefreshView.as_view(), name='token-refresh'),
+    path('logout/', LogoutView.as_view(), name='logout'),
+    path('firebase/', FirebaseTokenExchangeView.as_view(), name='firebase-auth'),
 
-    # User profile
-    path('users/me/', UserProfileView.as_view(), name='user-profile'),
-    path('users/change-password/', ChangePasswordView.as_view(), name='change-password'),
-    path('users/search/', UserSearchView.as_view(), name='user-search'),
+    # User profile & account
+    path('profile/', UserProfileView.as_view(), name='user-profile'),
+    path('change-password/', ChangePasswordView.as_view(), name='change-password'),
+    path('search/', UserSearchView.as_view(), name='user-search'),
 ]

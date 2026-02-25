@@ -23,7 +23,7 @@ urlpatterns = [
     path('api/v1/groups/', include('apps.groups.urls')),
     path('api/v1/trips/', include('apps.trips.urls')),
     path('api/v1/expenses/', include('apps.expenses.urls')),
-    path('api/v1/locations/', include('apps.locations.urls')),
+    path('api/v1/location/', include('apps.locations.urls')),
     path('api/v1/ai/', include('apps.ai_services.urls')),
 ]
 

@@ -245,6 +245,45 @@ class FirebaseTokenExchangeView(APIView):
         )
 
 
+class LogoutView(APIView):
+    """
+    Logout by blacklisting the refresh token.
+
+    POST /api/v1/auth/logout/
+    Body: {"refresh": "<refresh_token>"}
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        refresh_token = request.data.get('refresh')
+        if not refresh_token:
+            return Response(
+                {
+                    'success': False,
+                    'error': {
+                        'code': 'validation_error',
+                        'message': 'Refresh token is required.',
+                    },
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            token = RefreshToken(refresh_token)
+            token.blacklist()
+        except Exception:
+            # Token may already be blacklisted or invalid — still log out
+            pass
+
+        return Response(
+            {
+                'success': True,
+                'message': 'Successfully logged out.',
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
 class ChangePasswordView(APIView):
     """
     Change the authenticated user's password.

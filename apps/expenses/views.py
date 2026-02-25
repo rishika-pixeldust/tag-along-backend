@@ -6,7 +6,7 @@ from decimal import Decimal
 
 from django.db.models import Q, Sum
 from django.utils import timezone
-from rest_framework import status, viewsets
+from rest_framework import generics, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -160,21 +160,16 @@ class DebtViewSet(viewsets.ReadOnlyModelViewSet):
             }
         )
 
-    @action(detail=False, methods=['post'])
-    def settle(self, request):
+    @action(detail=True, methods=['post'])
+    def settle(self, request, pk=None):
         """
         Mark a debt as settled.
 
-        POST /api/v1/debts/settle/
-        Body: {"debt_id": "uuid"}
+        POST /api/v1/expenses/debts/{id}/settle/
         """
-        serializer = SettleDebtSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-
-        debt_id = serializer.validated_data['debt_id']
         try:
             debt = Debt.objects.get(
-                id=debt_id,
+                id=pk,
                 from_user=request.user,
                 is_settled=False,
             )
@@ -201,6 +196,62 @@ class DebtViewSet(viewsets.ReadOnlyModelViewSet):
                 'message': 'Debt settled successfully.',
             }
         )
+
+
+class ExpensesByGroupView(generics.ListAPIView):
+    """
+    List expenses for a specific group.
+
+    GET /api/v1/expenses/group/{group_id}/
+    """
+    serializer_class = ExpenseSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        group_id = self.kwargs['group_id']
+        return Expense.objects.filter(
+            group_id=group_id,
+            group__members__user=self.request.user,
+        ).select_related('paid_by', 'group', 'trip').prefetch_related(
+            'splits__user'
+        ).distinct()
+
+    def list(self, request, *args, **kwargs):
+        queryset = self.filter_queryset(self.get_queryset())
+        page = self.paginate_queryset(queryset)
+        if page is not None:
+            serializer = self.get_serializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+        serializer = self.get_serializer(queryset, many=True)
+        return Response({'success': True, 'data': serializer.data})
+
+
+class ExpensesByTripView(generics.ListAPIView):
+    """
+    List expenses for a specific trip.
+
+    GET /api/v1/expenses/trip/{trip_id}/
+    """
+    serializer_class = ExpenseSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        trip_id = self.kwargs['trip_id']
+        return Expense.objects.filter(
+            trip_id=trip_id,
+            group__members__user=self.request.user,
+        ).select_related('paid_by', 'group', 'trip').prefetch_related(
+            'splits__user'
+        ).distinct()
+
+    def list(self, request, *args, **kwargs):
+        queryset = self.filter_queryset(self.get_queryset())
+        page = self.paginate_queryset(queryset)
+        if page is not None:
+            serializer = self.get_serializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+        serializer = self.get_serializer(queryset, many=True)
+        return Response({'success': True, 'data': serializer.data})
 
 
 class ExpenseSummaryView(APIView):

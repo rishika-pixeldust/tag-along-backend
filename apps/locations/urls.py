@@ -20,7 +20,7 @@ router.register(r'alert-consents', AlertConsentViewSet, basename='alert-consent'
 urlpatterns = [
     path('', include(router.urls)),
     path(
-        'groups/<uuid:group_id>/members/',
+        '<uuid:group_id>/members/',
         GroupLocationView.as_view(),
         name='group-member-locations',
     ),
