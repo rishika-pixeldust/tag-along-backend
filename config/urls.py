@@ -13,7 +13,7 @@ from rest_framework.response import Response
 @api_view(['GET'])
 @permission_classes([AllowAny])
 def health_check(request):
-    return Response({'status': 'ok', 'service': 'tag-along-api', 'version': '2.0'})
+    return Response({'status': 'ok', 'service': 'tag-along-api', 'version': '3.0'})
 
 
 urlpatterns = [
