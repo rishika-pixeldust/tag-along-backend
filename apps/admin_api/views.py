@@ -204,7 +204,7 @@ def admin_users_list(request):
             'role': 'admin' if u.is_staff else 'user',
             'groupCount': u.group_count,
             'tripCount': Trip.objects.filter(
-                Q(created_by=u) | Q(group__group_memberships__user=u)
+                Q(created_by=u) | Q(group__members__user=u)
             ).distinct().count(),
             'createdAt': u.created_at.isoformat(),
             'updatedAt': u.updated_at.isoformat(),
@@ -246,7 +246,7 @@ def admin_user_detail(request, user_id):
             'role': 'admin' if u.is_staff else 'user',
             'groupCount': u.group_count,
             'tripCount': Trip.objects.filter(
-                Q(created_by=u) | Q(group__group_memberships__user=u)
+                Q(created_by=u) | Q(group__members__user=u)
             ).distinct().count(),
             'createdAt': u.created_at.isoformat(),
             'updatedAt': u.updated_at.isoformat(),
