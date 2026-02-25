@@ -12,7 +12,7 @@ class GroupMemberSerializer(serializers.ModelSerializer):
     userId = serializers.CharField(source='user.id', read_only=True)
     groupId = serializers.CharField(source='group.id', read_only=True)
     userName = serializers.SerializerMethodField()
-    userAvatar = serializers.CharField(source='user.avatar', read_only=True, allow_blank=True)
+    userAvatar = serializers.SerializerMethodField()
     joinedAt = serializers.DateTimeField(source='joined_at', read_only=True)
 
     class Meta:
@@ -25,10 +25,14 @@ class GroupMemberSerializer(serializers.ModelSerializer):
         full = f'{u.first_name} {u.last_name}'.strip()
         return full or u.email
 
+    def get_userAvatar(self, obj):
+        url = getattr(obj.user, 'avatar', None) or ''
+        return url.strip() or None
+
 
 class GroupSerializer(serializers.ModelSerializer):
     inviteCode = serializers.CharField(source='invite_code', read_only=True)
-    photoUrl = serializers.URLField(source='photo', read_only=True, allow_blank=True)
+    photoUrl = serializers.SerializerMethodField()
     createdBy = serializers.CharField(source='created_by.id', read_only=True)
     isActive = serializers.BooleanField(source='is_active', read_only=True)
     memberCount = serializers.ReadOnlyField(source='member_count')
@@ -41,6 +45,10 @@ class GroupSerializer(serializers.ModelSerializer):
             'createdBy', 'isActive', 'memberCount', 'createdAt',
         ]
         read_only_fields = fields
+
+    def get_photoUrl(self, obj):
+        url = getattr(obj, 'photo', None) or ''
+        return url.strip() or None
 
 
 class GroupCreateSerializer(serializers.ModelSerializer):

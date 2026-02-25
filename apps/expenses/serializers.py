@@ -31,7 +31,7 @@ class ExpenseSerializer(serializers.ModelSerializer):
     paidBy = serializers.CharField(source='paid_by.id', read_only=True)
     paidByName = serializers.SerializerMethodField()
     splitType = serializers.CharField(source='split_type', read_only=True)
-    receiptUrl = serializers.URLField(source='receipt_url', read_only=True, allow_blank=True)
+    receiptUrl = serializers.SerializerMethodField()
     createdAt = serializers.DateTimeField(source='created_at', read_only=True)
 
     class Meta:
@@ -46,6 +46,10 @@ class ExpenseSerializer(serializers.ModelSerializer):
         u = obj.paid_by
         full = f'{u.first_name} {u.last_name}'.strip()
         return full or u.email
+
+    def get_receiptUrl(self, obj):
+        url = getattr(obj, 'receipt_url', None) or ''
+        return url.strip() or None
 
 
 class ExpenseCreateSerializer(serializers.Serializer):

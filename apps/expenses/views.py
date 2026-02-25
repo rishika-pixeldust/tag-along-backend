@@ -79,6 +79,11 @@ class ExpenseViewSet(viewsets.ModelViewSet):
         serializer = ExpenseSerializer(instance)
         return Response({'success': True, 'data': serializer.data})
 
+    def list(self, request, *args, **kwargs):
+        queryset = self.filter_queryset(self.get_queryset())
+        serializer = ExpenseSerializer(queryset, many=True)
+        return Response({'success': True, 'data': serializer.data})
+
     def destroy(self, request, *args, **kwargs):
         instance = self.get_object()
         instance.delete()
@@ -114,6 +119,11 @@ class DebtViewSet(viewsets.ReadOnlyModelViewSet):
             queryset = queryset.filter(is_settled=settled.lower() == 'true')
 
         return queryset.distinct()
+
+    def list(self, request, *args, **kwargs):
+        queryset = self.filter_queryset(self.get_queryset())
+        serializer = DebtSerializer(queryset, many=True)
+        return Response({'success': True, 'data': serializer.data})
 
     @action(detail=False, methods=['post'])
     def simplify(self, request):
@@ -240,10 +250,6 @@ class ExpensesByGroupView(generics.ListAPIView):
 
     def list(self, request, *args, **kwargs):
         queryset = self.filter_queryset(self.get_queryset())
-        page = self.paginate_queryset(queryset)
-        if page is not None:
-            serializer = self.get_serializer(page, many=True)
-            return self.get_paginated_response(serializer.data)
         serializer = self.get_serializer(queryset, many=True)
         return Response({'success': True, 'data': serializer.data})
 
@@ -268,10 +274,6 @@ class ExpensesByTripView(generics.ListAPIView):
 
     def list(self, request, *args, **kwargs):
         queryset = self.filter_queryset(self.get_queryset())
-        page = self.paginate_queryset(queryset)
-        if page is not None:
-            serializer = self.get_serializer(page, many=True)
-            return self.get_paginated_response(serializer.data)
         serializer = self.get_serializer(queryset, many=True)
         return Response({'success': True, 'data': serializer.data})
 

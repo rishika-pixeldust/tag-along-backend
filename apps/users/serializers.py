@@ -17,7 +17,7 @@ class UserSerializer(serializers.ModelSerializer):
     """
     firstName = serializers.CharField(source='first_name', read_only=True)
     lastName = serializers.CharField(source='last_name', read_only=True)
-    avatarUrl = serializers.URLField(source='avatar', read_only=True, allow_null=True)
+    avatarUrl = serializers.SerializerMethodField()
     preferredCurrency = serializers.CharField(source='preferred_currency', read_only=True)
     isPremium = serializers.BooleanField(source='is_premium', read_only=True)
 
@@ -34,6 +34,10 @@ class UserSerializer(serializers.ModelSerializer):
             'isPremium',
         ]
         read_only_fields = ['id', 'email', 'isPremium']
+
+    def get_avatarUrl(self, obj):
+        url = getattr(obj, 'avatar', None) or ''
+        return url.strip() or None
 
 
 class UserRegistrationSerializer(serializers.Serializer):
@@ -97,7 +101,8 @@ class UserUpdateSerializer(serializers.Serializer):
         if 'phone' in validated_data:
             instance.phone = validated_data['phone']
         if 'avatarUrl' in validated_data:
-            instance.avatar = validated_data['avatarUrl']
+            raw = validated_data['avatarUrl']
+            instance.avatar = (raw or '').strip() if raw is not None else ''
         if 'preferredCurrency' in validated_data:
             instance.preferred_currency = validated_data['preferredCurrency']
         instance.save()

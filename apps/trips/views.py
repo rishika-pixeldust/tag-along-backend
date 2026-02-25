@@ -71,6 +71,11 @@ class TripViewSet(viewsets.ModelViewSet):
         serializer = TripSerializer(instance)
         return Response({'success': True, 'data': serializer.data})
 
+    def list(self, request, *args, **kwargs):
+        queryset = self.filter_queryset(self.get_queryset())
+        serializer = TripSerializer(queryset, many=True)
+        return Response({'success': True, 'data': serializer.data})
+
     def update(self, request, *args, **kwargs):
         partial = kwargs.pop('partial', True)
         instance = self.get_object()
@@ -109,6 +114,11 @@ class TripStopViewSet(viewsets.ModelViewSet):
         context = super().get_serializer_context()
         context['trip_id'] = self.kwargs.get('trip_pk')
         return context
+
+    def list(self, request, *args, **kwargs):
+        queryset = self.filter_queryset(self.get_queryset())
+        serializer = TripStopSerializer(queryset, many=True)
+        return Response({'success': True, 'data': serializer.data})
 
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
