@@ -175,7 +175,7 @@ def admin_users_list(request):
     limit = int(request.query_params.get('limit', 20))
 
     qs = User.objects.annotate(
-        group_count=Count('groupmember', distinct=True),
+        group_count=Count('group_memberships', distinct=True),
     ).order_by('-created_at')
 
     if search:
@@ -204,7 +204,7 @@ def admin_users_list(request):
             'role': 'admin' if u.is_staff else 'user',
             'groupCount': u.group_count,
             'tripCount': Trip.objects.filter(
-                Q(created_by=u) | Q(group__members=u)
+                Q(created_by=u) | Q(group__group_memberships__user=u)
             ).distinct().count(),
             'createdAt': u.created_at.isoformat(),
             'updatedAt': u.updated_at.isoformat(),
@@ -226,7 +226,7 @@ def admin_users_list(request):
 def admin_user_detail(request, user_id):
     try:
         u = User.objects.annotate(
-            group_count=Count('groupmember', distinct=True),
+            group_count=Count('group_memberships', distinct=True),
         ).get(id=user_id)
     except User.DoesNotExist:
         return Response({'success': False, 'error': {'message': 'User not found'}}, status=404)
@@ -246,7 +246,7 @@ def admin_user_detail(request, user_id):
             'role': 'admin' if u.is_staff else 'user',
             'groupCount': u.group_count,
             'tripCount': Trip.objects.filter(
-                Q(created_by=u) | Q(group__members=u)
+                Q(created_by=u) | Q(group__group_memberships__user=u)
             ).distinct().count(),
             'createdAt': u.created_at.isoformat(),
             'updatedAt': u.updated_at.isoformat(),
