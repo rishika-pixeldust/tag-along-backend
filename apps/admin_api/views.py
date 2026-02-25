@@ -176,6 +176,7 @@ def admin_users_list(request):
 
     qs = User.objects.annotate(
         group_count=Count('group_memberships', distinct=True),
+        trip_count_ann=Count('created_trips', distinct=True),
     ).order_by('-created_at')
 
     if search:
@@ -187,7 +188,7 @@ def admin_users_list(request):
 
     total = qs.count()
     offset = (page - 1) * limit
-    users = qs[offset: offset + limit]
+    users = list(qs[offset: offset + limit])
 
     users_data = []
     for u in users:
@@ -199,13 +200,11 @@ def admin_users_list(request):
             'firstName': u.first_name or '',
             'lastName': u.last_name or '',
             'avatarUrl': u.avatar or None,
-            'phone': u.phone or '',
+            'phone': getattr(u, 'phone', '') or '',
             'status': 'active' if u.is_active else 'inactive',
             'role': 'admin' if u.is_staff else 'user',
             'groupCount': u.group_count,
-            'tripCount': Trip.objects.filter(
-                Q(created_by=u) | Q(group__members__user=u)
-            ).distinct().count(),
+            'tripCount': u.trip_count_ann,
             'createdAt': u.created_at.isoformat(),
             'updatedAt': u.updated_at.isoformat(),
             'lastLoginAt': u.last_login.isoformat() if u.last_login else u.created_at.isoformat(),
@@ -227,6 +226,7 @@ def admin_user_detail(request, user_id):
     try:
         u = User.objects.annotate(
             group_count=Count('group_memberships', distinct=True),
+            trip_count_ann=Count('created_trips', distinct=True),
         ).get(id=user_id)
     except User.DoesNotExist:
         return Response({'success': False, 'error': {'message': 'User not found'}}, status=404)
@@ -241,13 +241,11 @@ def admin_user_detail(request, user_id):
             'firstName': u.first_name or '',
             'lastName': u.last_name or '',
             'avatarUrl': u.avatar or None,
-            'phone': u.phone or '',
+            'phone': getattr(u, 'phone', '') or '',
             'status': 'active' if u.is_active else 'inactive',
             'role': 'admin' if u.is_staff else 'user',
             'groupCount': u.group_count,
-            'tripCount': Trip.objects.filter(
-                Q(created_by=u) | Q(group__members__user=u)
-            ).distinct().count(),
+            'tripCount': u.trip_count_ann,
             'createdAt': u.created_at.isoformat(),
             'updatedAt': u.updated_at.isoformat(),
             'lastLoginAt': u.last_login.isoformat() if u.last_login else u.created_at.isoformat(),
