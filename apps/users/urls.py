@@ -2,10 +2,10 @@
 URL configuration for the Users app.
 """
 from django.urls import path
-from rest_framework_simplejwt.views import TokenRefreshView
 
 from apps.users.views import (
     ChangePasswordView,
+    CustomTokenRefreshView,
     FirebaseTokenExchangeView,
     LoginView,
     LogoutView,
@@ -20,7 +20,7 @@ urlpatterns = [
     # Authentication
     path('register/', RegisterView.as_view(), name='register'),
     path('login/', LoginView.as_view(), name='login'),
-    path('refresh/', TokenRefreshView.as_view(), name='token-refresh'),
+    path('refresh/', CustomTokenRefreshView.as_view(), name='token-refresh'),
     path('logout/', LogoutView.as_view(), name='logout'),
     path('firebase/', FirebaseTokenExchangeView.as_view(), name='firebase-auth'),
 

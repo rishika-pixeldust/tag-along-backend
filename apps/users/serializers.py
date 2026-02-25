@@ -1,5 +1,7 @@
 """
 Serializers for the Users app.
+
+All serializers use camelCase field names to match the Flutter mobile client.
 """
 from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
@@ -11,91 +13,95 @@ User = get_user_model()
 class UserSerializer(serializers.ModelSerializer):
     """
     Read-only serializer for User objects.
+    Outputs camelCase field names for Flutter compatibility.
     """
-    full_name = serializers.ReadOnlyField()
+    firstName = serializers.CharField(source='first_name', read_only=True)
+    lastName = serializers.CharField(source='last_name', read_only=True)
+    avatarUrl = serializers.URLField(source='avatar', read_only=True, allow_null=True)
+    preferredCurrency = serializers.CharField(source='preferred_currency', read_only=True)
+    isPremium = serializers.BooleanField(source='is_premium', read_only=True)
 
     class Meta:
         model = User
         fields = [
             'id',
             'email',
-            'username',
-            'first_name',
-            'last_name',
-            'full_name',
+            'firstName',
+            'lastName',
             'phone',
-            'avatar',
-            'preferred_currency',
-            'is_premium',
-            'created_at',
-            'updated_at',
+            'avatarUrl',
+            'preferredCurrency',
+            'isPremium',
         ]
-        read_only_fields = [
-            'id',
-            'email',
-            'is_premium',
-            'created_at',
-            'updated_at',
-        ]
+        read_only_fields = ['id', 'email', 'isPremium']
 
 
-class UserRegistrationSerializer(serializers.ModelSerializer):
+class UserRegistrationSerializer(serializers.Serializer):
     """
     Serializer for user registration.
+    Accepts camelCase from Flutter, auto-generates username from email.
     """
+    firstName = serializers.CharField(max_length=150)
+    lastName = serializers.CharField(max_length=150)
+    email = serializers.EmailField()
     password = serializers.CharField(
         write_only=True,
-        required=True,
         validators=[validate_password],
         style={'input_type': 'password'},
     )
-    password_confirm = serializers.CharField(
-        write_only=True,
-        required=True,
-        style={'input_type': 'password'},
-    )
+    phone = serializers.CharField(max_length=20, required=False, allow_blank=True)
 
-    class Meta:
-        model = User
-        fields = [
-            'email',
-            'username',
-            'first_name',
-            'last_name',
-            'password',
-            'password_confirm',
-            'phone',
-            'preferred_currency',
-        ]
-
-    def validate(self, attrs):
-        if attrs['password'] != attrs.pop('password_confirm'):
-            raise serializers.ValidationError(
-                {'password_confirm': 'Passwords do not match.'}
-            )
-        return attrs
+    def validate_email(self, value):
+        if User.objects.filter(email=value).exists():
+            raise serializers.ValidationError('A user with this email already exists.')
+        return value.lower()
 
     def create(self, validated_data):
-        password = validated_data.pop('password')
-        user = User(**validated_data)
-        user.set_password(password)
+        email = validated_data['email']
+        # Auto-generate username from email prefix
+        base_username = email.split('@')[0][:30]
+        username = base_username
+        counter = 1
+        while User.objects.filter(username=username).exists():
+            username = f'{base_username}{counter}'
+            counter += 1
+
+        user = User(
+            email=email,
+            username=username,
+            first_name=validated_data['firstName'],
+            last_name=validated_data['lastName'],
+            phone=validated_data.get('phone', ''),
+        )
+        user.set_password(validated_data['password'])
         user.save()
         return user
 
 
-class UserUpdateSerializer(serializers.ModelSerializer):
+class UserUpdateSerializer(serializers.Serializer):
     """
     Serializer for updating user profile.
+    Accepts camelCase field names from Flutter.
     """
-    class Meta:
-        model = User
-        fields = [
-            'first_name',
-            'last_name',
-            'phone',
-            'avatar',
-            'preferred_currency',
-        ]
+    firstName = serializers.CharField(max_length=150, required=False)
+    lastName = serializers.CharField(max_length=150, required=False)
+    phone = serializers.CharField(max_length=20, required=False, allow_blank=True)
+    avatarUrl = serializers.URLField(max_length=500, required=False, allow_null=True)
+    preferredCurrency = serializers.CharField(max_length=3, required=False)
+
+    def update(self, instance, validated_data):
+        if 'firstName' in validated_data:
+            instance.first_name = validated_data['firstName']
+        if 'lastName' in validated_data:
+            instance.last_name = validated_data['lastName']
+        if 'phone' in validated_data:
+            instance.phone = validated_data['phone']
+        if 'avatarUrl' in validated_data:
+            instance.avatar = validated_data['avatarUrl']
+        if 'preferredCurrency' in validated_data:
+            instance.preferred_currency = validated_data['preferredCurrency']
+        instance.save()
+        return instance
 
 
 class FirebaseTokenSerializer(serializers.Serializer):

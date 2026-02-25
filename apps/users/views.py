@@ -1,5 +1,7 @@
 """
 Views for the Users app.
+
+All auth responses use camelCase and flat token structure to match Flutter client.
 """
 import logging
 
@@ -11,6 +13,7 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework_simplejwt.exceptions import TokenError
 
 from apps.users.serializers import (
     ChangePasswordSerializer,
@@ -24,35 +27,35 @@ logger = logging.getLogger(__name__)
 User = get_user_model()
 
 
-class RegisterView(generics.CreateAPIView):
+def _build_auth_response(user, refresh_token, http_status=status.HTTP_200_OK):
+    """Helper to build a consistent auth response with camelCase tokens."""
+    return Response(
+        {
+            'success': True,
+            'user': UserSerializer(user).data,
+            'accessToken': str(refresh_token.access_token),
+            'refreshToken': str(refresh_token),
+        },
+        status=http_status,
+    )
+
+
+class RegisterView(APIView):
     """
     Register a new user account.
 
     POST /api/v1/auth/register/
+    Body: {"firstName": "...", "lastName": "...", "email": "...", "password": "..."}
     """
-    queryset = User.objects.all()
-    serializer_class = UserRegistrationSerializer
     permission_classes = [AllowAny]
 
-    def create(self, request, *args, **kwargs):
-        serializer = self.get_serializer(data=request.data)
+    def post(self, request):
+        serializer = UserRegistrationSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         user = serializer.save()
 
-        # Generate JWT tokens
         refresh = RefreshToken.for_user(user)
-
-        return Response(
-            {
-                'success': True,
-                'user': UserSerializer(user).data,
-                'tokens': {
-                    'refresh': str(refresh),
-                    'access': str(refresh.access_token),
-                },
-            },
-            status=status.HTTP_201_CREATED,
-        )
+        return _build_auth_response(user, refresh, status.HTTP_201_CREATED)
 
 
 class LoginView(APIView):
@@ -60,6 +63,7 @@ class LoginView(APIView):
     Login with email and password to obtain JWT tokens.
 
     POST /api/v1/auth/login/
+    Body: {"email": "...", "password": "..."}
     """
     permission_classes = [AllowAny]
 
@@ -118,46 +122,100 @@ class LoginView(APIView):
             )
 
         refresh = RefreshToken.for_user(user)
-        return Response(
-            {
-                'success': True,
-                'user': UserSerializer(user).data,
-                'tokens': {
-                    'refresh': str(refresh),
-                    'access': str(refresh.access_token),
+        return _build_auth_response(user, refresh, status.HTTP_200_OK)
+
+
+class CustomTokenRefreshView(APIView):
+    """
+    Refresh JWT tokens using camelCase field names for Flutter compatibility.
+
+    POST /api/v1/auth/refresh/
+    Body: {"refreshToken": "..."}
+    Response: {"accessToken": "...", "refreshToken": "..."}
+    """
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        refresh_token_str = request.data.get('refreshToken') or request.data.get('refresh')
+        if not refresh_token_str:
+            return Response(
+                {
+                    'success': False,
+                    'error': {
+                        'code': 'validation_error',
+                        'message': 'refreshToken is required.',
+                    },
                 },
-            },
-            status=status.HTTP_200_OK,
-        )
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            old_refresh = RefreshToken(refresh_token_str)
+            # Get the user for the response
+            user_id = old_refresh.payload.get('user_id')
+            user = User.objects.get(id=user_id)
+
+            # Create new access token
+            access_token = str(old_refresh.access_token)
+
+            # If rotation is enabled, blacklist old and create new refresh
+            response_data = {
+                'success': True,
+                'accessToken': access_token,
+                'refreshToken': str(old_refresh),
+                'user': UserSerializer(user).data,
+            }
+
+            if settings.SIMPLE_JWT.get('ROTATE_REFRESH_TOKENS', False):
+                old_refresh.blacklist()
+                new_refresh = RefreshToken.for_user(user)
+                response_data['accessToken'] = str(new_refresh.access_token)
+                response_data['refreshToken'] = str(new_refresh)
+
+            return Response(response_data, status=status.HTTP_200_OK)
+
+        except TokenError:
+            return Response(
+                {
+                    'success': False,
+                    'error': {
+                        'code': 'token_invalid',
+                        'message': 'Token is invalid or expired.',
+                    },
+                },
+                status=status.HTTP_401_UNAUTHORIZED,
+            )
+        except User.DoesNotExist:
+            return Response(
+                {
+                    'success': False,
+                    'error': {
+                        'code': 'user_not_found',
+                        'message': 'User not found.',
+                    },
+                },
+                status=status.HTTP_401_UNAUTHORIZED,
+            )
 
 
-class UserProfileView(generics.RetrieveUpdateAPIView):
+class UserProfileView(APIView):
     """
     Retrieve or update the authenticated user's profile.
 
-    GET  /api/v1/users/me/
-    PATCH /api/v1/users/me/
+    GET   /api/v1/auth/profile/
+    PATCH /api/v1/auth/profile/
     """
     permission_classes = [IsAuthenticated]
 
-    def get_object(self):
-        return self.request.user
-
-    def get_serializer_class(self):
-        if self.request.method in ('PATCH', 'PUT'):
-            return UserUpdateSerializer
-        return UserSerializer
-
-    def retrieve(self, request, *args, **kwargs):
+    def get(self, request):
         serializer = UserSerializer(request.user)
         return Response({'success': True, 'data': serializer.data})
 
-    def update(self, request, *args, **kwargs):
-        partial = kwargs.pop('partial', True)
+    def patch(self, request):
         serializer = UserUpdateSerializer(
             request.user,
             data=request.data,
-            partial=partial,
+            partial=True,
         )
         serializer.is_valid(raise_exception=True)
         serializer.save()
@@ -184,11 +242,9 @@ class FirebaseTokenExchangeView(APIView):
         firebase_token = serializer.validated_data['firebase_token']
 
         try:
-            # Verify the Firebase token
             import firebase_admin
             from firebase_admin import auth as firebase_auth
 
-            # Initialize Firebase app if not already initialized
             if not firebase_admin._apps:
                 cred_path = settings.FIREBASE_CREDENTIALS_PATH
                 if cred_path:
@@ -215,7 +271,6 @@ class FirebaseTokenExchangeView(APIView):
                 status=status.HTTP_401_UNAUTHORIZED,
             )
 
-        # Get or create user by firebase_uid
         user, created = User.objects.get_or_create(
             firebase_uid=firebase_uid,
             defaults={
@@ -231,18 +286,8 @@ class FirebaseTokenExchangeView(APIView):
             user.save(update_fields=['email'])
 
         refresh = RefreshToken.for_user(user)
-        return Response(
-            {
-                'success': True,
-                'user': UserSerializer(user).data,
-                'tokens': {
-                    'refresh': str(refresh),
-                    'access': str(refresh.access_token),
-                },
-                'created': created,
-            },
-            status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
-        )
+        http_status = status.HTTP_201_CREATED if created else status.HTTP_200_OK
+        return _build_auth_response(user, refresh, http_status)
 
 
 class LogoutView(APIView):
@@ -250,12 +295,16 @@ class LogoutView(APIView):
     Logout by blacklisting the refresh token.
 
     POST /api/v1/auth/logout/
-    Body: {"refresh": "<refresh_token>"}
+    Body: {"refreshToken": "<refresh_token>"}
     """
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
-        refresh_token = request.data.get('refresh')
+        # Accept both camelCase and snake_case
+        refresh_token = (
+            request.data.get('refreshToken')
+            or request.data.get('refresh')
+        )
         if not refresh_token:
             return Response(
                 {
@@ -272,7 +321,6 @@ class LogoutView(APIView):
             token = RefreshToken(refresh_token)
             token.blacklist()
         except Exception:
-            # Token may already be blacklisted or invalid — still log out
             pass
 
         return Response(
@@ -288,7 +336,7 @@ class ChangePasswordView(APIView):
     """
     Change the authenticated user's password.
 
-    POST /api/v1/users/change-password/
+    POST /api/v1/auth/change-password/
     """
     permission_classes = [IsAuthenticated]
 
@@ -315,7 +363,7 @@ class UserSearchView(generics.ListAPIView):
     """
     Search for users by email or name.
 
-    GET /api/v1/users/search/?q=<query>
+    GET /api/v1/auth/search/?q=<query>
     """
     serializer_class = UserSerializer
     permission_classes = [IsAuthenticated]
