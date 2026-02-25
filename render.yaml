@@ -1,0 +1,32 @@
+databases:
+  - name: tag-along-db
+    plan: free
+    databaseName: tagalong
+    user: tagalong
+
+services:
+  - type: web
+    name: tag-along-api
+    plan: free
+    runtime: python
+    buildCommand: "./build.sh"
+    startCommand: "gunicorn config.wsgi:application --bind 0.0.0.0:$PORT"
+    envVars:
+      - key: DJANGO_ENV
+        value: production
+      - key: DEBUG
+        value: "False"
+      - key: PYTHON_VERSION
+        value: "3.12.0"
+      - key: SECRET_KEY
+        generateValue: true
+      - key: ALLOWED_HOSTS
+        value: ".onrender.com"
+      - key: CORS_ALLOW_ALL_ORIGINS
+        value: "True"
+      - key: SECURE_SSL_REDIRECT
+        value: "False"
+      - key: DATABASE_URL
+        fromDatabase:
+          name: tag-along-db
+          property: connectionString
