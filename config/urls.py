@@ -25,6 +25,7 @@ urlpatterns = [
     path('api/v1/expenses/', include('apps.expenses.urls')),
     path('api/v1/location/', include('apps.locations.urls')),
     path('api/v1/ai/', include('apps.ai_services.urls')),
+    path('api/v1/admin/', include('apps.admin_api.urls')),
 ]
 
 # API documentation
