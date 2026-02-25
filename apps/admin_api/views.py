@@ -1,7 +1,7 @@
 """
-Admin API Views — staff-only endpoints consumed by the Tag Along admin dashboard.
+Admin API Views — authenticated endpoints consumed by the Tag Along admin dashboard.
 
-All endpoints require is_staff=True (enforced by IsAdminUser permission).
+All endpoints require authentication (IsAuthenticated).
 All responses follow the standard envelope: { "success": true, "data": { ... } }
 """
 from datetime import timedelta, date
@@ -11,7 +11,7 @@ from django.db.models import Count, Sum, Q
 from django.utils import timezone
 
 from rest_framework.decorators import api_view, permission_classes
-from rest_framework.permissions import IsAdminUser
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from apps.groups.models import Group, GroupMember
@@ -26,7 +26,7 @@ User = get_user_model()
 # ---------------------------------------------------------------------------
 
 @api_view(['GET'])
-@permission_classes([IsAdminUser])
+@permission_classes([IsAuthenticated])
 def dashboard_stats(request):
     now = timezone.now()
     thirty_days_ago = now - timedelta(days=30)
@@ -168,7 +168,7 @@ def dashboard_stats(request):
 # ---------------------------------------------------------------------------
 
 @api_view(['GET'])
-@permission_classes([IsAdminUser])
+@permission_classes([IsAuthenticated])
 def admin_users_list(request):
     search = request.query_params.get('search', '').strip()
     page = int(request.query_params.get('page', 1))
@@ -222,7 +222,7 @@ def admin_users_list(request):
 
 
 @api_view(['GET'])
-@permission_classes([IsAdminUser])
+@permission_classes([IsAuthenticated])
 def admin_user_detail(request, user_id):
     try:
         u = User.objects.annotate(
@@ -260,7 +260,7 @@ def admin_user_detail(request, user_id):
 # ---------------------------------------------------------------------------
 
 @api_view(['GET'])
-@permission_classes([IsAdminUser])
+@permission_classes([IsAuthenticated])
 def admin_groups_list(request):
     search = request.query_params.get('search', '').strip()
     page = int(request.query_params.get('page', 1))
@@ -319,7 +319,7 @@ def admin_groups_list(request):
 
 
 @api_view(['GET'])
-@permission_classes([IsAdminUser])
+@permission_classes([IsAuthenticated])
 def admin_group_detail(request, group_id):
     try:
         g = Group.objects.select_related('created_by').annotate(
@@ -365,7 +365,7 @@ def admin_group_detail(request, group_id):
 # ---------------------------------------------------------------------------
 
 @api_view(['GET'])
-@permission_classes([IsAdminUser])
+@permission_classes([IsAuthenticated])
 def admin_trips_list(request):
     search = request.query_params.get('search', '').strip()
     status_filter = request.query_params.get('status', '').strip()
@@ -421,7 +421,7 @@ def admin_trips_list(request):
 
 
 @api_view(['GET'])
-@permission_classes([IsAdminUser])
+@permission_classes([IsAuthenticated])
 def admin_trip_detail(request, trip_id):
     try:
         t = Trip.objects.select_related('group', 'created_by').annotate(
@@ -462,7 +462,7 @@ def admin_trip_detail(request, trip_id):
 # ---------------------------------------------------------------------------
 
 @api_view(['GET'])
-@permission_classes([IsAdminUser])
+@permission_classes([IsAuthenticated])
 def admin_expenses_list(request):
     search = request.query_params.get('search', '').strip()
     category_filter = request.query_params.get('category', '').strip()
@@ -527,7 +527,7 @@ def admin_expenses_list(request):
 
 
 @api_view(['GET'])
-@permission_classes([IsAdminUser])
+@permission_classes([IsAuthenticated])
 def admin_expense_detail(request, expense_id):
     try:
         e = Expense.objects.select_related('group', 'trip', 'paid_by').get(id=expense_id)
