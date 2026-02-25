@@ -198,6 +198,28 @@ class DebtViewSet(viewsets.ReadOnlyModelViewSet):
         )
 
 
+class DebtsByGroupView(generics.ListAPIView):
+    """
+    List debts for a specific group.
+    GET /api/v1/expenses/debts/<group_id>/
+    """
+    serializer_class = DebtSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        group_id = self.kwargs['group_id']
+        return Debt.objects.filter(
+            group_id=group_id,
+        ).filter(
+            Q(from_user=self.request.user) | Q(to_user=self.request.user),
+        ).select_related('from_user', 'to_user', 'group').distinct()
+
+    def list(self, request, *args, **kwargs):
+        queryset = self.filter_queryset(self.get_queryset())
+        serializer = self.get_serializer(queryset, many=True)
+        return Response({'success': True, 'data': serializer.data})
+
+
 class ExpensesByGroupView(generics.ListAPIView):
     """
     List expenses for a specific group.

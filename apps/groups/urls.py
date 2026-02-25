@@ -27,7 +27,7 @@ member_detail = GroupMemberViewSet.as_view({
 
 urlpatterns = [
     path('', include(router.urls)),
-    path('join/', JoinGroupView.as_view(), name='group-join'),
+    path('join/<str:invite_code>/', JoinGroupView.as_view(), name='group-join'),
     path(
         '<uuid:group_pk>/members/',
         member_list,

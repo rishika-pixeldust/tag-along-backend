@@ -1,61 +1,49 @@
 """
 Serializers for the Groups app.
+All output uses camelCase to match the Flutter client.
 """
 from rest_framework import serializers
 
 from apps.groups.models import Group, GroupMember
 from apps.groups.utils import generate_invite_code
-from apps.users.serializers import UserSerializer
 
 
 class GroupMemberSerializer(serializers.ModelSerializer):
-    """
-    Serializer for GroupMember instances.
-    """
-    user = UserSerializer(read_only=True)
+    userId = serializers.CharField(source='user.id', read_only=True)
+    groupId = serializers.CharField(source='group.id', read_only=True)
+    userName = serializers.SerializerMethodField()
+    userAvatar = serializers.CharField(source='user.avatar', read_only=True, allow_blank=True)
+    joinedAt = serializers.DateTimeField(source='joined_at', read_only=True)
 
     class Meta:
         model = GroupMember
-        fields = ['id', 'user', 'role', 'joined_at']
-        read_only_fields = ['id', 'joined_at']
+        fields = ['id', 'userId', 'groupId', 'role', 'userName', 'userAvatar', 'joinedAt']
+        read_only_fields = fields
+
+    def get_userName(self, obj):
+        u = obj.user
+        full = f'{u.first_name} {u.last_name}'.strip()
+        return full or u.email
 
 
 class GroupSerializer(serializers.ModelSerializer):
-    """
-    Read serializer for Group instances.
-    """
-    created_by = UserSerializer(read_only=True)
-    members = GroupMemberSerializer(many=True, read_only=True)
-    member_count = serializers.ReadOnlyField()
+    inviteCode = serializers.CharField(source='invite_code', read_only=True)
+    photoUrl = serializers.URLField(source='photo', read_only=True, allow_blank=True)
+    createdBy = serializers.CharField(source='created_by.id', read_only=True)
+    isActive = serializers.BooleanField(source='is_active', read_only=True)
+    memberCount = serializers.ReadOnlyField(source='member_count')
+    createdAt = serializers.DateTimeField(source='created_at', read_only=True)
 
     class Meta:
         model = Group
         fields = [
-            'id',
-            'name',
-            'description',
-            'invite_code',
-            'photo',
-            'created_by',
-            'is_active',
-            'members',
-            'member_count',
-            'created_at',
-            'updated_at',
+            'id', 'name', 'description', 'inviteCode', 'photoUrl',
+            'createdBy', 'isActive', 'memberCount', 'createdAt',
         ]
-        read_only_fields = [
-            'id',
-            'invite_code',
-            'created_by',
-            'created_at',
-            'updated_at',
-        ]
+        read_only_fields = fields
 
 
 class GroupCreateSerializer(serializers.ModelSerializer):
-    """
-    Serializer for creating a new group.
-    """
     class Meta:
         model = Group
         fields = ['name', 'description', 'photo']
@@ -64,35 +52,21 @@ class GroupCreateSerializer(serializers.ModelSerializer):
         user = self.context['request'].user
         validated_data['created_by'] = user
         validated_data['invite_code'] = generate_invite_code()
-
         group = Group.objects.create(**validated_data)
-
-        # Add creator as admin member
-        GroupMember.objects.create(
-            group=group,
-            user=user,
-            role=GroupMember.Role.ADMIN,
-        )
-
+        GroupMember.objects.create(group=group, user=user, role=GroupMember.Role.ADMIN)
         return group
 
 
 class GroupUpdateSerializer(serializers.ModelSerializer):
-    """
-    Serializer for updating a group.
-    """
     class Meta:
         model = Group
         fields = ['name', 'description', 'photo', 'is_active']
 
 
 class JoinGroupSerializer(serializers.Serializer):
-    """
-    Serializer for joining a group via invite code.
-    """
-    invite_code = serializers.CharField(max_length=8, required=True)
+    inviteCode = serializers.CharField(max_length=8, required=True)
 
-    def validate_invite_code(self, value):
+    def validate_inviteCode(self, value):
         try:
             group = Group.objects.get(invite_code=value.upper(), is_active=True)
         except Group.DoesNotExist:

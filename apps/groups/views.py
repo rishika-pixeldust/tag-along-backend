@@ -3,10 +3,11 @@ Views for the Groups app.
 """
 import logging
 
-from rest_framework import generics, status, viewsets
+from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
+from rest_framework.views import APIView
 
 from apps.groups.models import Group, GroupMember
 from apps.groups.permissions import IsGroupAdmin, IsGroupMember
@@ -15,7 +16,6 @@ from apps.groups.serializers import (
     GroupMemberSerializer,
     GroupSerializer,
     GroupUpdateSerializer,
-    JoinGroupSerializer,
 )
 from apps.groups.utils import generate_invite_code
 
@@ -23,15 +23,6 @@ logger = logging.getLogger(__name__)
 
 
 class GroupViewSet(viewsets.ModelViewSet):
-    """
-    ViewSet for Group CRUD operations.
-
-    list:   GET    /api/v1/groups/
-    create: POST   /api/v1/groups/
-    read:   GET    /api/v1/groups/{id}/
-    update: PATCH  /api/v1/groups/{id}/
-    delete: DELETE /api/v1/groups/{id}/
-    """
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
@@ -57,17 +48,13 @@ class GroupViewSet(viewsets.ModelViewSet):
         serializer.is_valid(raise_exception=True)
         group = serializer.save()
         return Response(
-            {
-                'success': True,
-                'data': GroupSerializer(group).data,
-            },
+            {'success': True, 'data': GroupSerializer(group).data},
             status=status.HTTP_201_CREATED,
         )
 
     def retrieve(self, request, *args, **kwargs):
         instance = self.get_object()
-        serializer = GroupSerializer(instance)
-        return Response({'success': True, 'data': serializer.data})
+        return Response({'success': True, 'data': GroupSerializer(instance).data})
 
     def list(self, request, *args, **kwargs):
         queryset = self.filter_queryset(self.get_queryset())
@@ -82,33 +69,17 @@ class GroupViewSet(viewsets.ModelViewSet):
         instance = self.get_object()
         instance.is_active = False
         instance.save()
-        return Response(
-            {'success': True, 'message': 'Group deactivated.'},
-            status=status.HTTP_200_OK,
-        )
+        return Response({'success': True, 'message': 'Group deactivated.'})
 
     @action(detail=True, methods=['post', 'get'], url_path='invite-code')
     def regenerate_invite_code(self, request, pk=None):
-        """Get or regenerate the invite code for a group."""
         group = self.get_object()
         group.invite_code = generate_invite_code()
         group.save(update_fields=['invite_code'])
-        return Response(
-            {
-                'success': True,
-                'invite_code': group.invite_code,
-            }
-        )
+        return Response({'success': True, 'inviteCode': group.invite_code})
 
 
 class GroupMemberViewSet(viewsets.ModelViewSet):
-    """
-    ViewSet for managing group members.
-
-    list:    GET    /api/v1/groups/{group_id}/members/
-    update:  PATCH  /api/v1/groups/{group_id}/members/{id}/
-    destroy: DELETE /api/v1/groups/{group_id}/members/{id}/
-    """
     serializer_class = GroupMemberSerializer
     permission_classes = [IsAuthenticated]
 
@@ -122,107 +93,82 @@ class GroupMemberViewSet(viewsets.ModelViewSet):
             return [IsAuthenticated(), IsGroupAdmin()]
         return [IsAuthenticated(), IsGroupMember()]
 
+    def list(self, request, *args, **kwargs):
+        queryset = self.filter_queryset(self.get_queryset())
+        serializer = GroupMemberSerializer(queryset, many=True)
+        return Response({'success': True, 'data': serializer.data})
+
     def destroy(self, request, *args, **kwargs):
         member = self.get_object()
         if member.role == GroupMember.Role.ADMIN:
-            # Check if there are other admins
             admin_count = GroupMember.objects.filter(
-                group=member.group,
-                role=GroupMember.Role.ADMIN,
+                group=member.group, role=GroupMember.Role.ADMIN,
             ).count()
             if admin_count <= 1:
                 return Response(
-                    {
-                        'success': False,
-                        'error': {
-                            'code': 'last_admin',
-                            'message': 'Cannot remove the last admin. Transfer admin role first.',
-                        },
-                    },
+                    {'success': False, 'error': {'code': 'last_admin', 'message': 'Cannot remove the last admin.'}},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
         member.delete()
-        return Response(
-            {'success': True, 'message': 'Member removed.'},
-            status=status.HTTP_200_OK,
-        )
+        return Response({'success': True, 'message': 'Member removed.'})
 
 
-class JoinGroupView(generics.CreateAPIView):
+class JoinGroupView(APIView):
     """
-    Join a group using an invite code.
-
-    POST /api/v1/groups/join/
+    Join a group using an invite code in the URL path.
+    POST /api/v1/groups/join/<invite_code>/
     """
-    serializer_class = JoinGroupSerializer
     permission_classes = [IsAuthenticated]
 
-    def create(self, request, *args, **kwargs):
-        serializer = self.get_serializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
+    def post(self, request, invite_code=None):
+        code = invite_code.upper()
+        try:
+            group = Group.objects.get(invite_code=code, is_active=True)
+        except Group.DoesNotExist:
+            return Response(
+                {'success': False, 'error': {'code': 'invalid_code', 'message': 'Invalid or expired invite code.'}},
+                status=status.HTTP_404_NOT_FOUND,
+            )
 
-        group = serializer.group
-        GroupMember.objects.create(
-            group=group,
-            user=request.user,
-            role=GroupMember.Role.MEMBER,
-        )
+        if GroupMember.objects.filter(group=group, user=request.user).exists():
+            return Response(
+                {'success': False, 'error': {'code': 'already_member', 'message': 'You are already a member of this group.'}},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
+        GroupMember.objects.create(group=group, user=request.user, role=GroupMember.Role.MEMBER)
         return Response(
-            {
-                'success': True,
-                'data': GroupSerializer(group).data,
-                'message': f'Successfully joined {group.name}.',
-            },
+            {'success': True, 'data': GroupSerializer(group).data},
             status=status.HTTP_201_CREATED,
         )
 
 
-class LeaveGroupView(generics.DestroyAPIView):
+class LeaveGroupView(APIView):
     """
     Leave a group.
-
-    DELETE /api/v1/groups/{group_id}/leave/
+    POST /api/v1/groups/<group_pk>/leave/
+    Flutter calls this with POST (not DELETE).
     """
     permission_classes = [IsAuthenticated]
 
-    def delete(self, request, group_pk=None, *args, **kwargs):
+    def post(self, request, group_pk=None):
         try:
-            membership = GroupMember.objects.get(
-                group_id=group_pk,
-                user=request.user,
-            )
+            membership = GroupMember.objects.get(group_id=group_pk, user=request.user)
         except GroupMember.DoesNotExist:
             return Response(
-                {
-                    'success': False,
-                    'error': {
-                        'code': 'not_member',
-                        'message': 'You are not a member of this group.',
-                    },
-                },
+                {'success': False, 'error': {'code': 'not_member', 'message': 'You are not a member of this group.'}},
                 status=status.HTTP_404_NOT_FOUND,
             )
 
         if membership.role == GroupMember.Role.ADMIN:
             admin_count = GroupMember.objects.filter(
-                group_id=group_pk,
-                role=GroupMember.Role.ADMIN,
+                group_id=group_pk, role=GroupMember.Role.ADMIN,
             ).count()
             if admin_count <= 1:
                 return Response(
-                    {
-                        'success': False,
-                        'error': {
-                            'code': 'last_admin',
-                            'message': 'You are the last admin. Transfer admin role before leaving.',
-                        },
-                    },
+                    {'success': False, 'error': {'code': 'last_admin', 'message': 'You are the last admin. Transfer admin role before leaving.'}},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
         membership.delete()
-        return Response(
-            {'success': True, 'message': 'Successfully left the group.'},
-            status=status.HTTP_200_OK,
-        )
+        return Response({'success': True, 'message': 'Successfully left the group.'})

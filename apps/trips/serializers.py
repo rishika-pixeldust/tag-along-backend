@@ -1,152 +1,117 @@
 """
 Serializers for the Trips app.
+All output uses camelCase to match the Flutter client.
 """
 from rest_framework import serializers
 
 from apps.trips.models import Trip, TripStop
-from apps.users.serializers import UserSerializer
 
 
 class TripStopSerializer(serializers.ModelSerializer):
-    """
-    Serializer for TripStop instances.
-    """
-    added_by = UserSerializer(read_only=True)
+    tripId = serializers.CharField(source='trip_id', read_only=True)
+    plannedArrival = serializers.DateTimeField(source='planned_arrival', read_only=True)
+    plannedDeparture = serializers.DateTimeField(source='planned_departure', read_only=True)
+    addedBy = serializers.CharField(source='added_by.id', read_only=True)
 
     class Meta:
         model = TripStop
         fields = [
-            'id',
-            'name',
-            'description',
-            'lat',
-            'lng',
-            'order',
-            'planned_arrival',
-            'planned_departure',
-            'added_by',
-            'created_at',
-            'updated_at',
+            'id', 'tripId', 'name', 'description',
+            'lat', 'lng', 'order',
+            'plannedArrival', 'plannedDeparture', 'addedBy',
         ]
-        read_only_fields = ['id', 'added_by', 'created_at', 'updated_at']
+        read_only_fields = fields
 
 
 class TripSerializer(serializers.ModelSerializer):
-    """
-    Read serializer for Trip instances.
-    """
-    created_by = UserSerializer(read_only=True)
-    stops = TripStopSerializer(many=True, read_only=True)
-    stop_count = serializers.ReadOnlyField()
+    groupId = serializers.CharField(source='group_id', read_only=True)
+    startDate = serializers.DateField(source='start_date', read_only=True)
+    endDate = serializers.DateField(source='end_date', read_only=True)
+    startLocation = serializers.CharField(source='start_location_name', read_only=True, allow_blank=True)
+    endLocation = serializers.CharField(source='end_location_name', read_only=True, allow_blank=True)
+    createdBy = serializers.CharField(source='created_by.id', read_only=True)
+    stopsCount = serializers.ReadOnlyField(source='stop_count')
+    createdAt = serializers.DateTimeField(source='created_at', read_only=True)
 
     class Meta:
         model = Trip
         fields = [
-            'id',
-            'group',
-            'name',
-            'description',
-            'start_date',
-            'end_date',
-            'status',
-            'start_location_name',
-            'start_lat',
-            'start_lng',
-            'end_location_name',
-            'end_lat',
-            'end_lng',
-            'created_by',
-            'stops',
-            'stop_count',
-            'created_at',
-            'updated_at',
+            'id', 'groupId', 'name', 'description',
+            'startDate', 'endDate', 'status',
+            'startLocation', 'endLocation',
+            'createdBy', 'stopsCount', 'createdAt',
         ]
-        read_only_fields = ['id', 'created_by', 'created_at', 'updated_at']
+        read_only_fields = fields
 
 
-class TripCreateSerializer(serializers.ModelSerializer):
-    """
-    Serializer for creating a new trip.
-    """
-    class Meta:
-        model = Trip
-        fields = [
-            'group',
-            'name',
-            'description',
-            'start_date',
-            'end_date',
-            'start_location_name',
-            'start_lat',
-            'start_lng',
-            'end_location_name',
-            'end_lat',
-            'end_lng',
-        ]
+class TripCreateSerializer(serializers.Serializer):
+    """Accepts camelCase from Flutter, maps to snake_case model fields."""
+    groupId = serializers.UUIDField()
+    name = serializers.CharField(max_length=200)
+    description = serializers.CharField(required=False, allow_blank=True, default='')
+    startDate = serializers.DateField()
+    endDate = serializers.DateField()
+    startLocation = serializers.CharField(max_length=255, required=False, allow_blank=True, default='')
+    endLocation = serializers.CharField(max_length=255, required=False, allow_blank=True, default='')
 
     def validate(self, attrs):
-        start_date = attrs.get('start_date')
-        end_date = attrs.get('end_date')
+        start_date = attrs.get('startDate')
+        end_date = attrs.get('endDate')
         if start_date and end_date and start_date > end_date:
-            raise serializers.ValidationError(
-                {'end_date': 'End date must be after start date.'}
-            )
+            raise serializers.ValidationError({'endDate': 'End date must be after start date.'})
 
-        # Verify user is a member of the group
         from apps.groups.models import GroupMember
         user = self.context['request'].user
-        group = attrs.get('group')
-        if group and not GroupMember.objects.filter(group=group, user=user).exists():
-            raise serializers.ValidationError(
-                {'group': 'You must be a member of this group.'}
-            )
+        group_id = attrs.get('groupId')
+        if group_id and not GroupMember.objects.filter(group_id=group_id, user=user).exists():
+            raise serializers.ValidationError({'groupId': 'You must be a member of this group.'})
         return attrs
 
     def create(self, validated_data):
-        validated_data['created_by'] = self.context['request'].user
-        return super().create(validated_data)
+        return Trip.objects.create(
+            group_id=validated_data['groupId'],
+            name=validated_data['name'],
+            description=validated_data.get('description', ''),
+            start_date=validated_data['startDate'],
+            end_date=validated_data['endDate'],
+            start_location_name=validated_data.get('startLocation', ''),
+            end_location_name=validated_data.get('endLocation', ''),
+            created_by=self.context['request'].user,
+        )
 
 
-class TripStopCreateSerializer(serializers.ModelSerializer):
-    """
-    Serializer for creating a trip stop.
-    """
-    class Meta:
-        model = TripStop
-        fields = [
-            'name',
-            'description',
-            'lat',
-            'lng',
-            'order',
-            'planned_arrival',
-            'planned_departure',
-        ]
+class TripStopCreateSerializer(serializers.Serializer):
+    """Accepts camelCase from Flutter for creating a trip stop."""
+    name = serializers.CharField(max_length=255)
+    description = serializers.CharField(required=False, allow_blank=True, default='')
+    lat = serializers.DecimalField(max_digits=10, decimal_places=7, required=False, allow_null=True)
+    lng = serializers.DecimalField(max_digits=10, decimal_places=7, required=False, allow_null=True)
+    order = serializers.IntegerField(default=0)
+    plannedArrival = serializers.DateTimeField(required=False, allow_null=True)
+    plannedDeparture = serializers.DateTimeField(required=False, allow_null=True)
 
     def create(self, validated_data):
-        validated_data['added_by'] = self.context['request'].user
-        validated_data['trip_id'] = self.context['trip_id']
-        return super().create(validated_data)
+        return TripStop.objects.create(
+            trip_id=self.context['trip_id'],
+            added_by=self.context['request'].user,
+            name=validated_data['name'],
+            description=validated_data.get('description', ''),
+            lat=validated_data.get('lat'),
+            lng=validated_data.get('lng'),
+            order=validated_data.get('order', 0),
+            planned_arrival=validated_data.get('plannedArrival'),
+            planned_departure=validated_data.get('plannedDeparture'),
+        )
 
 
 class TripStopReorderSerializer(serializers.Serializer):
-    """
-    Serializer for reordering trip stops.
-    """
-    stop_ids = serializers.ListField(
-        child=serializers.UUIDField(),
-        help_text='Ordered list of stop IDs.',
-    )
+    stop_ids = serializers.ListField(child=serializers.UUIDField())
 
     def validate_stop_ids(self, value):
         trip_id = self.context.get('trip_id')
         existing_ids = set(
             TripStop.objects.filter(trip_id=trip_id).values_list('id', flat=True)
         )
-        provided_ids = set(value)
-
-        if existing_ids != provided_ids:
-            raise serializers.ValidationError(
-                'Provided stop IDs do not match existing stops for this trip.'
-            )
+        if existing_ids != set(value):
+            raise serializers.ValidationError('Provided stop IDs do not match existing stops for this trip.')
         return value
