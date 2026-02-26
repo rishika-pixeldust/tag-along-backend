@@ -154,8 +154,8 @@ class UpdateLocationView(APIView):
 
 class GroupLocationView(APIView):
     """
-    Retrieve the current locations of group members who have given
-    active consent.
+    Retrieve the current locations of all group members who are actively
+    sharing their location (i.e. have a record in MemberLocation).
 
     GET /api/v1/location/{group_id}/members/
     """
@@ -175,29 +175,8 @@ class GroupLocationView(APIView):
                 status=status.HTTP_403_FORBIDDEN,
             )
 
-        # Find members with active, non-expired consent
-        now = timezone.now()
-        consented_user_ids = list(
-            LocationConsent.objects.filter(
-                group_id=group_id,
-                is_active=True,
-                start_date__lte=now,
-                end_date__gte=now,
-            ).values_list('user_id', flat=True)
-        )
-
-        if not consented_user_ids:
-            return Response({
-                'success': True,
-                'data': [],
-                'message': 'No members are currently sharing their location.',
-            })
-
-        # Read from PostgreSQL (MemberLocation table)
-        locations = MemberLocation.objects.filter(
-            user_id__in=consented_user_ids,
-            group_id=group_id,
-        )
+        # Return all members who have posted a location for this group
+        locations = MemberLocation.objects.filter(group_id=group_id)
 
         return Response({
             'success': True,
