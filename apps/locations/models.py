@@ -74,6 +74,39 @@ class AlertConsent(TimestampedModel):
         return f"{self.user.email} -> {self.group.name} alert consent ({status})"
 
 
+class MemberLocation(models.Model):
+    """
+    Stores the latest known location of a user within a group.
+    Used as the primary location store (replaces Firestore dependency).
+    One row per (user, group) — upserted on each location update.
+    """
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(
+        'users.User',
+        on_delete=models.CASCADE,
+        related_name='member_locations',
+    )
+    group = models.ForeignKey(
+        'groups.Group',
+        on_delete=models.CASCADE,
+        related_name='member_locations',
+    )
+    latitude = models.FloatField()
+    longitude = models.FloatField()
+    accuracy = models.FloatField(null=True, blank=True)
+    speed = models.FloatField(null=True, blank=True)
+    user_name = models.CharField(max_length=255, blank=True, default='')
+    user_avatar = models.URLField(max_length=500, blank=True, null=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'member_locations'
+        unique_together = ['user', 'group']
+
+    def __str__(self):
+        return f"{self.user_name or self.user_id} @ ({self.latitude}, {self.longitude})"
+
+
 class RouteAlert(TimestampedModel):
     """
     Audit record of a route deviation alert sent from one group member

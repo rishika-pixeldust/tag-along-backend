@@ -9,6 +9,7 @@ from apps.locations.views import (
     GroupLocationView,
     LocationConsentViewSet,
     SendRouteAlertView,
+    UpdateLocationView,
 )
 
 app_name = 'locations'
@@ -19,6 +20,11 @@ router.register(r'alert-consents', AlertConsentViewSet, basename='alert-consent'
 
 urlpatterns = [
     path('', include(router.urls)),
+    path(
+        'update/',
+        UpdateLocationView.as_view(),
+        name='update-location',
+    ),
     path(
         '<uuid:group_id>/members/',
         GroupLocationView.as_view(),

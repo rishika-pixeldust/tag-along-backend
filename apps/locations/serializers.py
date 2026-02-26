@@ -5,7 +5,7 @@ All output uses camelCase to match the Flutter client.
 from django.utils import timezone
 from rest_framework import serializers
 
-from apps.locations.models import AlertConsent, LocationConsent, RouteAlert
+from apps.locations.models import AlertConsent, LocationConsent, MemberLocation, RouteAlert
 
 
 class LocationConsentSerializer(serializers.ModelSerializer):
@@ -85,6 +85,39 @@ class AlertConsentCreateSerializer(serializers.ModelSerializer):
             defaults={'is_active': True, 'revoked_at': None},
         )
         return consent
+
+
+class MemberLocationUpdateSerializer(serializers.Serializer):
+    """Accepts location updates from the Flutter client."""
+    groupId = serializers.UUIDField()
+    latitude = serializers.FloatField()
+    longitude = serializers.FloatField()
+    accuracy = serializers.FloatField(required=False, allow_null=True)
+    speed = serializers.FloatField(required=False, allow_null=True)
+    userName = serializers.CharField(required=False, allow_blank=True, default='')
+    userAvatar = serializers.URLField(required=False, allow_null=True, allow_blank=True, default=None)
+
+    def validate(self, attrs):
+        from apps.groups.models import GroupMember
+        user = self.context['request'].user
+        group_id = attrs['groupId']
+        if not GroupMember.objects.filter(group_id=group_id, user=user).exists():
+            raise serializers.ValidationError({'groupId': 'You must be a member of this group.'})
+        return attrs
+
+
+class MemberLocationSerializer(serializers.ModelSerializer):
+    userId = serializers.CharField(source='user_id', read_only=True)
+    userName = serializers.CharField(source='user_name', read_only=True)
+    userAvatar = serializers.URLField(source='user_avatar', read_only=True)
+    lat = serializers.FloatField(source='latitude', read_only=True)
+    lng = serializers.FloatField(source='longitude', read_only=True)
+    updatedAt = serializers.DateTimeField(source='updated_at', read_only=True)
+
+    class Meta:
+        model = MemberLocation
+        fields = ['userId', 'userName', 'userAvatar', 'lat', 'lng', 'accuracy', 'speed', 'updatedAt']
+        read_only_fields = fields
 
 
 class RouteAlertCreateSerializer(serializers.Serializer):

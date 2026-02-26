@@ -14,12 +14,14 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.groups.models import GroupMember
-from apps.locations.models import AlertConsent, LocationConsent, RouteAlert
+from apps.locations.models import AlertConsent, LocationConsent, MemberLocation, RouteAlert
 from apps.locations.serializers import (
     AlertConsentCreateSerializer,
     AlertConsentSerializer,
     LocationConsentCreateSerializer,
     LocationConsentSerializer,
+    MemberLocationSerializer,
+    MemberLocationUpdateSerializer,
     RouteAlertCreateSerializer,
     RouteAlertSerializer,
 )
@@ -115,12 +117,47 @@ class LocationConsentViewSet(viewsets.ModelViewSet):
         )
 
 
+class UpdateLocationView(APIView):
+    """
+    Update the current user's location for a group.
+
+    POST /api/v1/location/update/
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        serializer = MemberLocationUpdateSerializer(
+            data=request.data,
+            context={'request': request},
+        )
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+
+        location, _ = MemberLocation.objects.update_or_create(
+            user=request.user,
+            group_id=data['groupId'],
+            defaults={
+                'latitude': data['latitude'],
+                'longitude': data['longitude'],
+                'accuracy': data.get('accuracy'),
+                'speed': data.get('speed'),
+                'user_name': data.get('userName', ''),
+                'user_avatar': data.get('userAvatar'),
+            },
+        )
+
+        return Response({
+            'success': True,
+            'data': MemberLocationSerializer(location).data,
+        })
+
+
 class GroupLocationView(APIView):
     """
     Retrieve the current locations of group members who have given
     active consent.
 
-    GET /api/v1/locations/groups/{group_id}/members/
+    GET /api/v1/location/{group_id}/members/
     """
     permission_classes = [IsAuthenticated]
 
@@ -156,34 +193,15 @@ class GroupLocationView(APIView):
                 'message': 'No members are currently sharing their location.',
             })
 
-        # Fetch locations from Firestore
-        try:
-            from apps.locations.services.firebase_location import FirebaseLocationService
-            location_service = FirebaseLocationService()
-            locations = location_service.get_group_member_locations(
-                group_id=str(group_id),
-                member_ids=[str(uid) for uid in consented_user_ids],
-            )
-        except Exception as exc:
-            logger.error(
-                'Failed to fetch locations for group %s: %s',
-                group_id,
-                exc,
-            )
-            return Response(
-                {
-                    'success': False,
-                    'error': {
-                        'code': 'service_error',
-                        'message': 'Unable to retrieve locations at this time.',
-                    },
-                },
-                status=status.HTTP_503_SERVICE_UNAVAILABLE,
-            )
+        # Read from PostgreSQL (MemberLocation table)
+        locations = MemberLocation.objects.filter(
+            user_id__in=consented_user_ids,
+            group_id=group_id,
+        )
 
         return Response({
             'success': True,
-            'data': locations,
+            'data': MemberLocationSerializer(locations, many=True).data,
         })
 
 
