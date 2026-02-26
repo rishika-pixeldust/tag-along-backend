@@ -17,6 +17,7 @@ from apps.expenses.serializers import (
     DebtSerializer,
     ExpenseCreateSerializer,
     ExpenseSerializer,
+    ExpenseSplitSerializer,
     SettleDebtSerializer,
 )
 from apps.groups.models import GroupMember
@@ -91,6 +92,18 @@ class ExpenseViewSet(viewsets.ModelViewSet):
             {'success': True, 'message': 'Expense deleted.'},
             status=status.HTTP_200_OK,
         )
+
+    @action(detail=True, methods=['get'])
+    def splits(self, request, pk=None):
+        """
+        List all splits for an expense.
+
+        GET /api/v1/expenses/{id}/splits/
+        """
+        expense = self.get_object()
+        splits = expense.splits.select_related('user').all()
+        serializer = ExpenseSplitSerializer(splits, many=True)
+        return Response({'success': True, 'data': serializer.data})
 
 
 class DebtViewSet(viewsets.ReadOnlyModelViewSet):
