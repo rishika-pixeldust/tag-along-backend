@@ -9,6 +9,7 @@ services:
     name: tag-along-api
     plan: free
     runtime: python
+    autoDeploy: true
     buildCommand: "./build.sh"
     startCommand: "gunicorn config.wsgi:application --bind 0.0.0.0:$PORT"
     healthCheckPath: /api/v1/health/
